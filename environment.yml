@@ -1,0 +1,12 @@
+name: SummerProj
+channels:
+  - defaults
+dependencies:
+  - python=3.11
+  - numpy
+  - scipy
+  - pytorch
+  - notebook
+  - matplotlib
+  - jupyter
+prefix: C:\Users\lenovo\miniconda3\envs\SummerProj
