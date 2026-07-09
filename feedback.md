@@ -129,3 +129,55 @@ Very well done — this is exactly the kind of systematic study I was hoping to 
 - Add a sentence or two of written takeaways under each plot, the way you did in Week 2. The plots are great; pairing them with "here's what I conclude" makes the analysis complete.
 - For the σ comparison, consider quantifying sample quality rather than only eyeballing it — even a rough metric helps.
 - Since the loss values differ in meaning across σ (the target `-eps/sigma` scales with σ), be a little careful comparing loss magnitudes across different noise levels directly.
+
+---
+
+## Follow-up on Week 3 (1D_Langevin.ipynb)
+
+I want to call this out separately because you went back and did a really thorough job on the blocking/reblocking suggestion. A few things I especially liked:
+
+- Starting the chain far from equilibrium (`x[0] = 5`), then using a **running-mean convergence plot** to *justify* the 10,000-step burn-in, turned a magic number into a defended choice. That's exactly the habit I was hoping to instill.
+- You implemented **Flyvbjerg–Petersen** reblocking correctly from scratch, and the plateau in the error curve makes the point vividly — the effective number of independent samples is far smaller than the 3M steps.
+- Putting a correlation-aware **error bar on every histogram bin** (treating each bin as an indicator-function expectation) went beyond what I asked, and it's exactly the right instinct. This is publication-grade thinking about uncertainty.
+
+One small thing to tighten: your per-bin error picker takes the plateau from around the `argmax` of the reblocking curve. Because the error estimate itself gets noisy at large block sizes (few blocks remain), `argmax` can occasionally land on a spuriously high point. A slightly more robust choice is to look for where the curve *flattens* (successive values agree within their own uncertainty) rather than where it's maximal. Minor, but worth knowing.
+
+---
+
+## Week 5
+
+Excellent work — you hit essentially every point in the plan, including the two things I flagged as most likely to trip you up.
+
+### discrete langevin (multi-scale, both versions)
+
+- **Noise conditioning done right.** Feeding σ in by concatenation (input dim 3) is exactly the pragmatic choice for a 2D toy — no need for anything fancier.
+- **You got the σ² loss weighting.** This was the gotcha I was most worried about — without it the small scales dominate and the large-σ score (the part that fills the empty regions) never trains. You nailed it.
+- **σ selection from the paper.** Choosing σ_max from the maximum pairwise distance and building the geometric ladder per the "Improved Techniques" recommendations is precisely what I was pointing you to. I also liked that you were explicit about the `_test` version *not* using this and the `_efficient` version *doing* so — that kind of self-documentation is a good habit.
+- **The empty regions are filled, and you measured it.** L1 dropping from 1214 (single-scale) to ~729–740 (multi-scale) quantifies the improvement rather than just asserting it. This closes the loop on the empty-blocks question from Week 4 — well done.
+
+Two things to take further:
+- **Step size across scales.** During annealed sampling you use a *constant* η at every noise level. Song & Ermon recommend scaling the step per level (roughly η_i ∝ σ_i² / σ_L²) so the dynamics stay well-conditioned as σ shrinks. Worth trying — it often noticeably improves the low-σ refinement.
+- **File naming.** `discrete langevin_test.ipynb` / `..._efficient.ipynb` have spaces and somewhat vague names. Underscores and clearer names (e.g. `multiscale_langevin.ipynb`) will save you headaches later, especially when importing or running from the command line.
+
+### The metric itself
+
+Your L1 density difference is a good, simple choice and the *relative* trend across methods is trustworthy. Just be aware it's binning-dependent and noisy in absolute terms — the number changes if you change bins. If you want a more principled scalar later, look at **maximum mean discrepancy (MMD)** or **energy distance**, which compare samples directly without gridding. Not necessary now, but good to have on your radar.
+
+---
+
+## Week 6
+
+### reverse_sde.ipynb
+
+This is genuinely impressive — a correct continuous-time VE SDE, from the schedule all the way through reverse-time sampling.
+
+- σ(t) = σ_min (σ_max/σ_min)^t with a **time-conditioned** score s(x, t), and the VE diffusion coefficient g(t) = σ(t)·√(2 ln(σ_max/σ_min)) — that's the right g for a geometric schedule, and it's easy to get wrong. You derived/matched it correctly.
+- **Reverse-time Euler–Maruyama** with initialization from N(0, σ_max² I): the signs, the g² factor on the score term, and the g√dt on the noise all check out.
+- And the three-way comparison lands the whole arc: **1214 → ~729 (multi-scale) → 606 (continuous SDE)**. A clean, monotonic, *measured* improvement across the three samplers is exactly the deliverable I wanted.
+
+Where to go from here: rather than doing more on the 2D toy, we're going to make the jump to a **physical system** next — that's where the real interest of this project lives, and you've clearly extracted the core lessons from the Swiss roll. A couple of things carry forward:
+- **Written derivation (do this now).** Pair your SDE code with a short written derivation of the reverse-time SDE (following Anderson) so the math and the implementation sit side by side. This is what we'll build on at the whiteboard, and it's cheap to do while it's fresh.
+- **Predictor–corrector (coming soon, as a tool).** You have the plain reverse-SDE (predictor) sampler. Adding Langevin "corrector" steps (Song et al.'s PC sampler) is a natural extension — but hold off doing it on the toy. On the higher-dimensional, multimodal physical distribution we're moving to, the corrector is often what makes sampling work *at all*, so we'll introduce it there where the need is real.
+- **Probability-flow ODE (later).** The deterministic ODE with the same score gives another sampler and, importantly, *exact likelihoods* — which for a physical system means access to **free energies**. Worth keeping on your radar for down the road.
+
+Overall: you've gone from a single fixed noise scale to a continuous-time score SDE, validated at each step with a consistent metric. That's the full conceptual arc of modern score-based generative modeling, and you built it from first principles. Really nice work — and a great launchpad for moving to a real physical system.
