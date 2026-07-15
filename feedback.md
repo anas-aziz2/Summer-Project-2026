@@ -202,13 +202,13 @@ A good exercise: plot all three (variance, std dev, std error) as a function of 
 
 **3. What the mean and the variance should be — and why you never see the ground state.** Here's the satisfying part: in the harmonic (low-temperature) limit, *both* the mean and the width of your energy histogram are predictable from the temperature alone, via equipartition. With $d = 3N-6 = 33$ vibrational modes (the 3 translations and 3 rotations of the whole cluster carry no energy, hence $3N-6$, not $3N$):
 
-$$\langle U\rangle - U_\text{min} \approx \tfrac{d}{2}\,T, \qquad \mathrm{Var}(U) \approx \tfrac{d}{2}\,T^2.$$
+$$\langle U\rangle - U_\text{min} \approx \tfrac{d}{2} T \qquad \mathrm{Var}(U) \approx \tfrac{d}{2} T^2$$
 
 For LJ-13 at $T=0.10$, with $U_\text{min} = -44.327$, this predicts a mean of $\approx -42.68$ (you got $-42.53$) and a standard deviation of $\approx 0.41$ (you got $0.44$). Both match well — and the fact that yours sit *slightly* above the harmonic prediction is the first fingerprint of anharmonicity. **Predict these two numbers from $T$ and overlay them on your histogram** — it's a great validation of your sampler. (The general statement is $\mathrm{Var}(E) = k_B T^2 C_v$: energy fluctuations *are* the heat capacity. The harmonic result is just $C_v = d/2$.)
 
 Now the deeper point. Notice that your lowest sampled energy is $-43.90$, but the true global minimum (the Mackay icosahedron) is $-44.3268$. **Look up that reference value and check against it.** You never reach it — and you *shouldn't* expect to, for a beautiful reason. The energy distribution is the product of the density of states (entropy) and the Boltzmann factor:
 
-$$P(E) \propto g(E)\,e^{-E/T}, \qquad g(E)\propto (E-U_\text{min})^{d/2-1},$$
+$$P(E) \propto g(E) e^{-E/T} \qquad g(E)\propto (E-U_\text{min})^{d/2-1}$$
 
 which is a Gamma distribution that *vanishes* at $E = U_\text{min}$. So although the Boltzmann factor *per configuration* is largest exactly at the global minimum (for any temperature), the ground state is a "lonely island": it is a single point of essentially zero phase-space volume. It has the highest probability of any individual microstate in the universe, yet the *energy* histogram peaks well above it because there are so many more configurations at higher energy. This is the microstate-vs-macrostate distinction in action, and it's worth sitting with. **Experiment:** rerun at lower temperatures and watch $\langle U\rangle$ move toward $U_\text{min}$ as the harmonic formula predicts — but note you'll still never sample $U_\text{min}$ exactly, and that acceptance will collapse at low $T$ (the walker gets stuck), which is itself an instructive difficulty.
 
