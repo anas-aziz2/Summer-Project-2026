@@ -181,3 +181,45 @@ Where to go from here: rather than doing more on the 2D toy, we're going to make
 - **Probability-flow ODE (later).** The deterministic ODE with the same score gives another sampler and, importantly, *exact likelihoods* — which for a physical system means access to **free energies**. Worth keeping on your radar for down the road.
 
 Overall: you've gone from a single fixed noise scale to a continuous-time score SDE, validated at each step with a consistent metric. That's the full conceptual arc of modern score-based generative modeling, and you built it from first principles. Really nice work — and a great launchpad for moving to a real physical system.
+
+---
+
+## Week 7
+
+### Lennard_Jones_13.ipynb
+
+Good, solid start on the physical system — and given that you were learning Monte Carlo essentially from scratch this week, this is decent progress. The LJ potential and the Metropolis move are implemented correctly, and I'm especially pleased that you carried your Week 3 tools forward: the running-mean burn-in diagnostic and the Flyvbjerg–Petersen reblocking both reappear here, applied to the energy time series. That transfer of habits is exactly what I was hoping to see.
+
+Below is a fair amount, but most of it is one connected story about **two different quantities that are easy to confuse**. Keep that spine in mind as you read: (i) how *wide* the energy distribution physically is, and (ii) how *well you've measured its mean*. Almost everything below is one or the other.
+
+**1. Acceptance ratio.** Your 29.75% is fine — but as a rule of thumb we aim for ~50%, with roughly 25–65% being acceptable in practice. You're on the low side, which means your moves are a touch too large; shrinking the maximum displacement (currently 0.07) will push acceptance up toward 50%. Try tuning it and watch the acceptance respond.
+
+**2. Variance vs. standard deviation vs. standard error — make sure this distinction is crystal clear.** These get conflated constantly, and they mean genuinely different things:
+- The **variance** and its square root the **standard deviation** are *physical properties of the distribution* — they describe how wide your energy histogram genuinely is. As you collect more samples, these do **not** shrink; they converge to a fixed, temperature-dependent value.
+- The **standard error of the mean** ($\sigma/\sqrt{N_\text{eff}}$) describes *how well you have pinned down the mean* $\langle E\rangle$. This **does** shrink as you sample more, like $1/\sqrt{N}$.
+
+A good exercise: plot all three (variance, std dev, std error) as a function of the number of samples on the same figure. You should see two of them plateau and only one — the standard error — decrease. Note the $N_\text{eff}$, not $N$: because your samples are correlated (see point 4), the effective number of independent samples is much smaller than the raw count, and that's what actually sets your error bar.
+
+**3. What the mean and the variance should be — and why you never see the ground state.** Here's the satisfying part: in the harmonic (low-temperature) limit, *both* the mean and the width of your energy histogram are predictable from the temperature alone, via equipartition. With $d = 3N-6 = 33$ vibrational modes (the 3 translations and 3 rotations of the whole cluster carry no energy, hence $3N-6$, not $3N$):
+
+$$\langle U\rangle - U_\text{min} \approx \tfrac{d}{2}\,T, \qquad \mathrm{Var}(U) \approx \tfrac{d}{2}\,T^2.$$
+
+For LJ-13 at $T=0.10$, with $U_\text{min} = -44.327$, this predicts a mean of $\approx -42.68$ (you got $-42.53$) and a standard deviation of $\approx 0.41$ (you got $0.44$). Both match well — and the fact that yours sit *slightly* above the harmonic prediction is the first fingerprint of anharmonicity. **Predict these two numbers from $T$ and overlay them on your histogram** — it's a great validation of your sampler. (The general statement is $\mathrm{Var}(E) = k_B T^2 C_v$: energy fluctuations *are* the heat capacity. The harmonic result is just $C_v = d/2$.)
+
+Now the deeper point. Notice that your lowest sampled energy is $-43.90$, but the true global minimum (the Mackay icosahedron) is $-44.3268$. **Look up that reference value and check against it.** You never reach it — and you *shouldn't* expect to, for a beautiful reason. The energy distribution is the product of the density of states (entropy) and the Boltzmann factor:
+
+$$P(E) \propto g(E)\,e^{-E/T}, \qquad g(E)\propto (E-U_\text{min})^{d/2-1},$$
+
+which is a Gamma distribution that *vanishes* at $E = U_\text{min}$. So although the Boltzmann factor *per configuration* is largest exactly at the global minimum (for any temperature), the ground state is a "lonely island": it is a single point of essentially zero phase-space volume. It has the highest probability of any individual microstate in the universe, yet the *energy* histogram peaks well above it because there are so many more configurations at higher energy. This is the microstate-vs-macrostate distinction in action, and it's worth sitting with. **Experiment:** rerun at lower temperatures and watch $\langle U\rangle$ move toward $U_\text{min}$ as the harmonic formula predicts — but note you'll still never sample $U_\text{min}$ exactly, and that acceptance will collapse at low $T$ (the walker gets stuck), which is itself an instructive difficulty.
+
+**4. Autocorrelation and the sampling interval.** You reblocked the energy, which is great, but two things to add:
+- **Make an autocorrelation plot.** Plot the normalized autocorrelation $C(\tau)$ of the energy and extract the integrated autocorrelation time $\tau_\text{int}$. This gives you the correlation time directly, the effective sample size $N_\text{eff} = N/(2\tau_\text{int})$, and an independent cross-check on your reblocking plateau. These are complementary views of the same thing.
+- **Justify your save interval from it.** You currently save a configuration every 2000 steps, and your reblocking suggests the energy correlation time is *also* roughly 1000–2000 steps — so your saved configurations are separated by only about one correlation time and are still mildly correlated. Use the *measured* correlation time to *choose* the interval, rather than picking it by hand. This closes the loop on exactly why we learned reblocking in the first place.
+
+  On the reblocking plot itself: plotting block size on a $\log_2$ axis is exactly right (each step doubles the block). It plateaus at a fairly large block size because you reblocked the *per-step* series, so block size is measured in single MC steps and the correlation time is ~1000s of steps (only 1 of 13 atoms moves per step, so the configuration decorrelates slowly) — that's sensible, not surprising. Don't over-interpret the far right of the curve: with few blocks left, the error estimate itself becomes noisy (its own uncertainty grows like $1/\sqrt{2(N_\text{blocks}-1)}$).
+
+**5. Efficiency — the classic Monte Carlo speedup you're missing.** You recompute the *full* $O(N^2)$ energy at every step. But a trial move displaces only *one* atom, so the energy *change* $\Delta E$ only involves that atom's pair interactions — an $O(N)$ incremental update. Computing $\Delta E$ directly (rather than $E_\text{new} - E_\text{old}$ from two full evaluations) is ~13× faster here and much more for LJ-38. This is the single most valuable practical MC lesson before you scale up, so please refactor to incremental updates.
+
+**6. Reproducibility.** The notebook reads `LJ13.xyz`, but that file isn't committed to the repo (it's not in `data/` either), so the notebook won't run as pushed. Please add the starting-structure file (or generate it in-notebook) so the analysis is reproducible.
+
+Genuinely nice work for a first MC week — the fact that you reused your own reblocking machinery on a brand-new system is the kind of thing that will serve you throughout research.
