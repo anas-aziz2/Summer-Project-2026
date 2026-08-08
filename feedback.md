@@ -225,3 +225,40 @@ which is a Gamma distribution that *vanishes* at $U = U_\text{min}$. So although
 **6. Reproducibility.** The notebook reads `LJ13.xyz`, but that file isn't committed to the repo (it's not in `data/` either), so the notebook won't run as pushed. Please add the starting-structure file (or generate it in-notebook) so the analysis is reproducible.
 
 Genuinely nice work for a first MC week — the fact that you reused your own reblocking machinery on a brand-new system is the kind of thing that will serve you throughout research.
+
+---
+
+## Week 8
+
+This was a big week and you handled it really well. Two things up front: first, you went back and addressed essentially the *entire* Week 7 feedback list — I'll acknowledge that below because it's worth it. Second, the score-model baseline behaves exactly the way we expected a non-invariant baseline to behave — it "fails" in the instructive way, which is the point. Let's go through both.
+
+### Cleaning up Week 7 (Lennard_Jones_13.ipynb)
+
+You closed out almost every open item, and did it properly:
+
+- **Incremental $\Delta E$** — you added `atom_energy(...)` and now update only the moved atom's contribution ($O(N)$ instead of $O(N^2)$). That's the classic MC speedup, and it's exactly why you were able to push to $10^8$ steps. Nicely done.
+- **Acceptance tuning** — dropping the max displacement from 0.07 to 0.043 put you at **49.94%**, essentially dead on the 50% target. Good.
+- **Autocorrelation** — you implemented $C(\tau)$, plotted it (with a zoom), and computed the integrated autocorrelation time $\tau_\text{int}$. This is the complementary view I was hoping for.
+- **Variance / std-dev / std-error vs. $N$** — you built the plot and drew the right conclusion: variance and standard deviation plateau, only the standard error keeps falling. That distinction is now demonstrated, not just asserted.
+- **Harmonic overlay** — you coded up $\langle U\rangle = U_\text{min} + \tfrac{d}{2}k_B T$ and $\mathrm{Var} = \tfrac{d}{2}k_B T^2$, overlaid the Gaussian, and correctly attributed the small deviation to anharmonicity. Your numbers (mean $-42.53$, std $0.44$) sit right on the predictions.
+- **Reproducibility + units** — `LJ13.xyz` is committed, the dataset is saved, and you added `k_b = 1.0` explicitly. 
+
+One thing to reconcile (a good learning point, not a mistake): your three correlation diagnostics don't quite agree. You get $\tau_\text{int} \approx 134$, but you read the reblocking plateau at block size $\approx 4000$ and say the autocorrelation decays by lag $\approx 1000$–$2000$. Those should be roughly consistent. The likely culprit is that you sum $C(\tau)$ all the way out to lag 5000, which accumulates a lot of tail *noise* into $\tau_\text{int}$ — the standard fix is an automatic windowing/truncation (look up "Sokal windowing"): stop summing once the autocorrelation is buried in noise. It doesn't hurt you in practice — saving a configuration every 4000 steps when $\tau_\text{int}\approx 134$ gives very well-decorrelated data — but it's worth understanding *why* the three numbers should line up and getting them to.
+
+### The baseline score model (LJ_13_Baseline_Score_Model.ipynb)
+
+The structure here is exactly right, and I'm pleased you carried forward two things we discussed:
+- You **brought the predictor–corrector sampler forward** from the plan, and — importantly — you *noticed and documented* that the corrector blew up and needed the step size clamped. That instinct (watch for the explosion, diagnose it, note it honestly) is exactly right. The blow-up itself is informative: it usually means the corrector step is too aggressive relative to the score magnitude, which ties into the SNR calibration.
+- Your evaluation is honest and quantitative: energy histograms, pairwise-distance distributions, and the headline number that only **~5.4% of generated configurations have $U < 0$**. That's the expected outcome of a non-invariant baseline, and *measuring* the failure rather than hand-waving it is the right scientific move.
+
+Now the things to fix or think about:
+
+1. **There's a bug in your energy-comparison plot.** In the cell where you build `training_energies`, you compute it from `configs_generated`, not from the Monte Carlo `configs`. So in the comparison histogram, the curve you've labeled "Monte Carlo" is actually your *generated* data plotted against itself — the figure isn't showing what the label claims. Change that line to use the MC `configs` and the comparison will be meaningful. (Your pairwise-distance comparison a few cells later *does* use `configs` correctly, so it's just that one line.)
+
+2. **Your `sigma_max = 10` hack and the center-of-mass are the same story.** You capped $\sigma_\text{max}$ at 10 because the max pairwise distance came out around 82. That 82 is not physical structure — it's because the raw configurations aren't centered, so the whole cluster has random-walked around in absolute space, and the distance between two configuration *vectors* is dominated by where the cluster happens to sit, not by its shape. The correct fix is exactly what you started doing in the Modified notebook: **remove the center of mass.** Once you do, the data lives in a compact region, $\sigma_\text{max}$ from the max pairwise distance becomes sensible, and you won't need the hack. Worth connecting those two dots explicitly — the symptom (huge $\sigma_\text{max}$) and the cure (COM removal) are the translational-invariance lesson in action.
+
+3. **Guard `lj_energy` against collapsed atoms.** For generated configs where two atoms nearly coincide, $r\to 0$ makes $(\sigma/r)^{12}$ overflow. Your $U<0$ filter sidesteps it, but a small guard (or clipping $r$) will keep the numbers clean and avoid `inf`/`nan` surprises.
+
+### Where you are, and the road ahead
+
+You've done exactly what Week 8 asked: a working non-invariant baseline, evaluated against the Week 7 physical criteria, with the predictor–corrector brought in — and the failure it exhibits (5.4% physical) is precisely the motivation for the symmetry work. And you've *already* started that in the Modified notebook by handling translation. The next steps are rotation and, the hard one, permutation — which is where the equivariant (EGNN-style) architecture comes in. Take your time with the EGNN; it's the conceptual heart of this part of the project, and it's worth understanding deeply rather than rushing. Really strong week.
