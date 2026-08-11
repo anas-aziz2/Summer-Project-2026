@@ -345,7 +345,9 @@ Translational symmetry has **two** consequences for the score, and you secured o
 
 It is very natural to assume the second follows from the first, but it doesn't. Here is why — your coordinate update is
 
-$$\Delta \mathbf{x}_i = \frac{1}{N} \sum_j (\mathbf{x}_i - \mathbf{x}_j) w_{ij}, \qquad w_{ij} = \texttt{coord\_mlp}([h_i, h_j, d_{ij}^2, \sigma])$$
+$$\Delta \mathbf{x}_i = \frac{1}{N} \sum_j (\mathbf{x}_i - \mathbf{x}_j) w_{ij}$$
+
+where the scalar weight $w_{ij}$ is what your `coord_mlp` returns for the pair $(i,j)$, from the inputs $[h_i, h_j, d_{ij}^2, \sigma]$.
 
 Sum that over $i$, then relabel $i \leftrightarrow j$ in the same sum and average the two versions:
 
