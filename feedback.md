@@ -486,7 +486,9 @@ So for next week, in priority order:
 4. The $U_\text{min}$ line and the $\sqrt{2\tau_\text{int}}$ check (item 4).
 5. Look up the two LJ-38 funnel structures and put images of them in your notebook — see below for what to look for.
 
-Then we start looking toward **LJ-38**. The reason comes directly out of your own correlation analysis. Your energy decorrelates in about 130 samples. But *basin identity* — which funnel the cluster is sitting in — does not. Escaping a funnel means crossing a barrier that ordinary energy fluctuations never resolve, so its correlation time can be enormous. Your chain can look beautifully converged in $U$ while never once having visited the second funnel.
+**LJ-38 is where we go next, in the fall.** It is the opening problem of the research project rather than a last week of summer, because doing it properly means implementing and tuning replica exchange, regenerating the dataset, retraining, and checking that *both* funnel populations come out with the right relative weight. That is a month of work, and it deserves to be done at its own pace. What is left of the summer goes into making LJ-13 genuinely finished, plus the talk and getting the report started.
+
+The reason LJ-38 is the right next problem comes directly out of your own correlation analysis. Your energy decorrelates in about 130 samples. But *basin identity* — which funnel the cluster is sitting in — does not. Escaping a funnel means crossing a barrier that ordinary energy fluctuations never resolve, so its correlation time can be enormous. Your chain can look beautifully converged in $U$ while never once having visited the second funnel.
 
 This is also an important lesson: **the number of independent samples is a property of the observable, not of the chain.** LJ-38 has a double-funnel landscape — the global minimum is a truncated octahedron sitting at the bottom of a *narrow* funnel, while a broader, entropically favoured icosahedral funnel lies slightly higher in energy — and it is the textbook case where this bites. That is why we will need replica exchange. Your well-behaved LJ-13 diagnostics are the perfect contrast to set it against.
 
@@ -501,7 +503,7 @@ The two minima have *different* energies, roughly $-173.93$ vs $-173.25$, a gap 
 
 What your network *does* collapse is the **permutational isomers** within each funnel. A structure with point group order $h$ corresponds to $N!/h$ distinct labelled minima, so the truncated octahedron accounts for $38!/48$ of them and the icosahedral minimum for $38!/10$. Since $38! \approx 5 \times 10^{44}$, your equivariant network folds something like $10^{43}$ labelled configurations into a single point *within each funnel*, while correctly keeping the two funnels apart. That is exactly the behaviour you want, and it is your $13!$ result scaled up to something ridiculous.
 
-**Warning to think about for next week.** Equivariance and ergodicity are separate problems, and you have solved only one of them:
+**A warning to carry into the fall.** Equivariance and ergodicity are separate problems, and you have solved only one of them:
 
 - Equivariance solves *"the same structure written down many different ways."* Done, by construction, for free.
 - The double funnel is *"genuinely different structures separated by a barrier."* Your equivariant network is exactly as helpless against this as your baseline was.
@@ -509,5 +511,7 @@ What your network *does* collapse is the **permutational isomers** within each f
 A generative model can only reproduce what its training distribution contains. If your MC chain never crosses into the second funnel, your score model will never generate that funnel — and the failure will be **silent**. The energy histogram will look clean, the pair distances will overlay, every diagnostic you currently have will pass, and the model will be confidently sampling one basin out of two. This is why replica exchange is needed to fix the *training data*, not the model. Do not expect the architecture to rescue you here.
 
 One last thing, because I think you will enjoy it. That point group order $h$ does double duty. Your network divides out the $N!/h$ permutational isomers. But in the harmonic superposition approximation that very same multiplicity enters the partition function — each minimum contributes with weight proportional to $(N!/h_i) e^{-\beta U_i}$. Lower symmetry means more isomers, which means more entropy. The icosahedral structure, with $h = 10$ against the octahedron's $48$, therefore gains $k_B \ln(48/10) \approx 1.57 k_B$ of entropy purely by being *less* symmetric — one of the ingredients that lets the higher-energy structure win at finite temperature. The same symmetry number, doing two entirely different jobs: telling your network what to ignore, and telling the physics which funnel to prefer.
+
+Two documents are coming separately: a plan for the fall research project, and a scaffold for the report. Start the report in the transition week and write the **validation methodology** section first — it is your strongest material, and it is the part of this work that most people simply do not do.
 
 Really strong work this week.
