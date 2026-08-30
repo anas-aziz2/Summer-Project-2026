@@ -515,3 +515,101 @@ One last thing, because I think you will enjoy it. That point group order $h$ do
 Two documents are coming separately: a plan for the fall research project, and a scaffold for the report. Start the report in the transition week and write the **validation methodology** section first — it is your strongest material, and it is the part of this work that most people simply do not do.
 
 Really strong work this week.
+
+## Weeks 10 and 11
+
+Two things to cover: your interesting $\sigma_\text{min}$ result and a question about what your model is actually doing at low $\sigma$ that you should please test for yourself. 
+
+### Decoupling the two $\sigma_\text{min}$ values
+
+First, last week you decoupled $\sigma_\text{min}$ for training vs. sampling. This appears to have been helpful, as **$\sigma_\text{min}$ was doing two unrelated jobs in your code.**
+
+- In **training**, $\sigma_\text{min}$ is the bottom of the range of noise levels the network is shown. It answers "over what range of $\sigma$ do I want my network to be accurate?"
+- In **sampling**, $\sigma_\text{min}$ is where the reverse SDE stops integrating. It answers "how much leftover noise is in my output?"
+
+Both of these are important,  but here we focus on the second one. Your sampler terminates at $\sigma_\text{min}$, so what comes out is not a clean configuration. You get a configuration plus a Gaussian smear of width $\sigma_\text{min}$ on every coordinate. In a potential as steep as Lennard-Jones, this smearing raises the energy. We can estimate how much it raises the energy.  In the harmonic approximation,
+
+$$\Delta U = \frac{1}{2}\sigma_\text{min}^2 \sum_i k_i$$
+
+We can use your own measured score norm to estimate $\sum_i k_i \approx 5500$, which comes out around $0.27$ compared to a total excess of about $0.48$ over the calibrated training mean. Roughly half of the remaining $T_\text{eff}$ gap was not a modelling error. It was just leftover sampling noise. That is why lowering the sampling $\sigma_\text{min}$ helped as much as it did.
+
+**Interesting note.** You found that pushing sampling $\sigma_\text{min}$ too low makes things worse again, so there appears to be an optimum. We can investigate this behavior a little more.  Two things you should try.
+
+**First, quantitative assessment.** Let's make a table of $T_\text{eff}$ against $\sigma_\text{min}^\text{sampling}$. You can generate a two-dimensional sweep of $(\sigma_\text{min}^\text{train}, \sigma_\text{min}^\text{sampling})$ vs $T_\text{eff}$.
+
+**Second, we can explore and distinguish between two candidate explanations** for why things got worse as you further reduce $\sigma_\text{min}^\text{sampling}$:
+
+*(a) The network is extrapolating.* Below the training range it has never been supervised, so its output is unconstrained and thus unphysical.
+
+*(b) Your time discretization is getting coarser.*  Your current noise schedule is geometric, but you have `n_steps` fixed at 1000. That means that as you lower $\sigma_\text{min}$, the same number of steps stretches  over a larger range in $\log\sigma$:
+
+| $\sigma_\text{min}^\text{sampling}$ | $\log(\sigma_\text{max}/\sigma_\text{min})$ | $\Delta\log\sigma$ per step |
+|---|---|---|
+| 0.01 | 6.47 | 0.0065 |
+| 0.001 | 8.77 | 0.0088 (35% coarser) |
+| 0.0001 | 11.07 | 0.0111 (71% coarser) |
+
+So "too low diverges" might not be related to the network, and instead just be a result of under-resolved integration.
+
+My own guess is that (b) is more likely (I could be wrong). Reasoning: your predictor update is
+
+$$\Delta x = g^2 s \Delta t = (\sigma c)^2 \cdot \frac{f_\theta}{\sigma} \cdot \Delta t = \sigma c^2 f_\theta \Delta t$$
+
+so the update scales as $\sigma f_\theta$. As $\sigma \to 0$, errors in $f_\theta$ have a vanishing effect on the trajectory, provided $f_\theta$ stays bounded. Small-$\sigma$ mistakes should be cheap. Whereas coarsening `n_steps` degrades the integration everywhere, including the large-$\sigma$ stretch where the structure of the configuration is actually decided.
+
+There are two quick tests that can help you distinguish between these:
+
+1. **Rerun with `n_steps` scaled up** in proportion, so steps-per-decade stays constant. If the problem disappears, we know the issue was discretization.
+2. **Plot $\|f_\theta\|$ against $\sigma$**, including below your training floor, say 0.01, 0.003, 0.001, 0.0003. No sampling and no retraining required, just a loop over $\sigma$. If it stays near $\sqrt{36}\approx 6$, we know we don't have a fundamental extrapolation problem. If it climbs, we know that extrapolation is an issue.
+
+**One thing to check in your code while we're at it.** Your $g(t)$ reads the module-level `sigma_min`:
+
+```python
+def g(t):
+    sigma = get_sigma(t)
+    return (sigma * np.sqrt(2*np.log(sigma_max/sigma_min)))
+```
+
+So changing $\sigma_\text{min}$ for sampling silently changes the diffusion coefficient along the *whole* trajectory (not just at the bottom). That is self-consistent for a variance-exploding SDE, but it means your two $\sigma_\text{min}$ values are less cleanly separated than the variable names suggest. Good to be clear about which one enters $g$.
+
+### Is your model memorizing? 
+
+On the training side: we had been attributing the training-side effect to the tendency of the model to memorize the configurations at very low $\sigma_\text{min}$. I now think that is only one of two possibilities, and I would like us to check rather than assume. Either the network really is memorizing, or it is not — and if it is not, the more interesting question is what it *is* doing down there, and whether the target we are asking it to hit at low $\sigma_\text{min}^\text{training}$ is even the target we want. 
+
+At small $\sigma$ there are **two different things** your network could be trying to reproduce:
+
+- The **empirical target** $-\mathbf{z}/\sigma$ — an arrow pointing back at the one specific training configuration the noise came from. Reproducing this requires knowing where all 25,000 configurations sit. That is what "memorizing" is: arrows pointing you back to the nearest configuration.
+- The actual **physical score** $-\beta\nabla U$ — the score of the true Boltzmann distribution. This is a smooth function of the configuration and requires no knowledge of individual data points.
+
+Because $\mathbf{z}$ is drawn independently of the potential, these two things are largely independent (yay high dimensional vectors). That observation makes them separable.
+
+**Think about what each of the two hypotheses above predicts?** See if you can fill this table in (to develop the concept), before you check your data.
+
+| Hypothesis | cosine with $-\mathbf{z}$ | cosine with $-\beta\nabla U$ |
+|---|---|---|
+| The model is memorizing, but undertrained | | |
+| The model is estimating the physical density | | |
+
+One of the four entries we can derive. If the model were producing the physical score *perfectly*, its cosine with $-\mathbf{z}$ would not be zero. The physical score is evaluated at the noisy point $\tilde{x} = x + \sigma\mathbf{z}$, and expanding in normal coordinates with force constants $k_i$,
+
+$$-\beta\nabla U(\tilde{x})_i = \underbrace{-\beta k_i q_i}_{\text{norm} \approx 224} \; \underbrace{-\; \beta k_i \sigma z_i}_{\text{a genuine } -\mathbf{z} \text{ component}}$$
+
+The second term is meaningful: noise pushes you up the well, so the physical score genuinely points partly back along the noise. Its size is $\beta\sigma\sqrt{\sum_i k_i^2}\approx 96$, giving
+
+$$\cos\left(-\beta\nabla U(\tilde{x}), -\mathbf{z}\right) \approx \frac{96}{\sqrt{224^2 + 96^2}} \approx 0.4$$
+
+So a *perfect* physical-score model should read about 0.4 against $-\mathbf{z}$, not 0. (Roughly — the exact value depends on the spread of force constants)
+
+**Then fill in your measurements:**
+
+| | vs. $-\mathbf{z}/\sigma$ | vs. $-\beta\nabla U$ |
+|---|---|---|
+| cosine | | |
+| norm ratio | | |
+
+You have all of this data already, but the comparison isn't exactly apples to apples. The runs currently live in different notebooks and are evaluated at slightly different points, so they have never been side by side. Two conditions to make it a fair test: 
+
+- **Same model, same $\sigma$, same evaluation points** for both comparisons.
+- **Average over many configurations and noise draws.** Your current sweep uses a single configuration and a single noise draw, which is why $\sigma = 1.0$ read 0.894 one week and 0.761 the next on the same model. That is probably sampling noise (one set of single-sample numbers can't settle the question). Do something like a hundred draws.
+
+**To make us doubly sure**, one more experiment: train on 20,000 configurations and hold out 5,000. Evaluate the score accuracy at noisy points generated from the *held-out* configurations and compare with the training ones. A model that has memorized has never seen those points and will get noticeably worse. A model that has learned the density will be just fine. This is the standard test for answering "is my model memorizing?" in the current diffusion literature. We're going to use this test again, including this fall and in the literature we read, so might as well learn to run the test.
