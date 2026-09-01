@@ -592,7 +592,7 @@ Because $\mathbf{z}$ is drawn independently of the potential, these two things a
 
 One of the four entries we can derive. If the model were producing the physical score *perfectly*, its cosine with $-\mathbf{z}$ would not be zero. The physical score is evaluated at the noisy point $\tilde{x} = x + \sigma\mathbf{z}$, and expanding in normal coordinates with force constants $k_i$,
 
-$$-\beta\nabla U(\tilde{x})_i = \underbrace{-\beta k_i q_i}_{\text{norm} \approx 224} \; \underbrace{-\; \beta k_i \sigma z_i}_{\text{a genuine } -\mathbf{z} \text{ component}}$$
+$$-\beta\nabla U(\tilde{x})_i = \underbrace{-\beta k_i q_i}_{\text{norm} \approx 224} + \underbrace{(-\beta k_i \sigma z_i)}_{\text{a genuine } -\mathbf{z} \text{ component}}$$
 
 The second term is meaningful: noise pushes you up the well, so the physical score genuinely points partly back along the noise. Its size is $\beta\sigma\sqrt{\sum_i k_i^2}\approx 96$, giving
 
