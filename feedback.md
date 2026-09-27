@@ -613,3 +613,117 @@ You have all of this data already, but the comparison isn't exactly apples to ap
 - **Average over many configurations and noise draws.** Your current sweep uses a single configuration and a single noise draw, which is why $\sigma = 1.0$ read 0.894 one week and 0.761 the next on the same model. That is probably sampling noise (one set of single-sample numbers can't settle the question). Do something like a hundred draws.
 
 **To make us doubly sure**, one more experiment: train on 20,000 configurations and hold out 5,000. Evaluate the score accuracy at noisy points generated from the *held-out* configurations and compare with the training ones. A model that has memorized has never seen those points and will get noticeably worse. A model that has learned the density will be just fine. This is the standard test for answering "is my model memorizing?" in the current diffusion literature. We're going to use this test again, including this fall and in the literature we read, so might as well learn to run the test.
+
+## Weeks 12 and 13
+
+Finishing off LJ-13 on a high note. Looks like our final number is now within a few percent of the reference. Four items below. 
+
+### The combined result
+
+Assembling everything, all against the anharmonicity-calibrated training value $T_\text{eff} = 0.1091$:
+
+| Stage | $T_\text{eff}$ | Excess |
+|---|---|---|
+| Week 9 (first equivariant model) | 0.1425 | 0.0334 |
+| Week 10 (reparametrized, COM-free) | 0.1382 | 0.0291 |
+| $\sigma_\text{min}$ tuning alone | 0.119 | 0.0099 |
+| Langevin refinement alone | 0.1137 | 0.0046 |
+| **Both together** | **0.1119** | **0.0028** |
+
+**We have now removed 92% of the original discrepancy.** That is a good mark to compare against (rather than just as "2.66% away" — the distance from the reference is the small number, but the fraction of the error you eliminated is a good achievement).
+
+It looks like, as we expected, the two fixes implemented together **largely overlap**, so combining them only gives a modest gain over the Langevin refinement alone, landing at 0.1119 rather than reaching 0.109. So combining the two fixes generated only $0.0018$ beyond the refinement by itself. This is probably because both fixes were addressing the same physical effect — residual noise left in the sample because sampling stops at a finite $\sigma_\text{min}$.
+
+**Remember this (it will probably matter more for LJ-38).** The Langevin refinement uses the *true* potential, so given enough steps it will re-equilibrate the sample no matter what the generative model produced. On LJ-13 that is fine: there is one basin, and relaxing into it is exactly what you want. On LJ-38 be aware that we may hit a snag. A refinement long enough to re-equilibrate could carry a configuration *between funnels*, and then you are no longer measuring what the model generated — you are measuring what your Langevin run converged to. So when we do LJ-38, we want to settle on a principled step count first, while it is cheap and the answer does not matter, and add a check that basins don't change under Langevin refinement. You used 200 steps here; down the line for LJ-38 we should find out how far you could go before the answer changes.
+
+### Memorization question answered! 
+
+Ok, final analysis is in. Same model, same $\sigma$, same evaluation points, and **100 noise draws averaged** rather than the single draw you were using before.  Good statistics habits!
+
+| $\sigma$ | cos with $-\mathbf{z}$ | cos with $-\beta\nabla U$ | norm vs $-\beta\nabla U$ |
+|---|---|---|---|
+| 0.10 | 0.897 | 0.538 | 0.011 |
+| 0.05 | 0.785 | 0.737 | 0.099 |
+| 0.02 | 0.519 | 0.931 | 0.478 |
+| 0.01 | 0.315 | 0.971 | 0.794 |
+
+The prediction for a physics-learned model was roughly $0.4$ against the noise and approaching $1$ against the physics. You measured $0.315$ and $0.971$. A memorizing network would have read close to $1$ and close to $0$. You answered the question correctly -- we're not memorizing! 
+
+There is more you can learn from the table above. It you look at the trends, you can see **the same crossover you measured in Week 11, seen from a third angle**: at large $\sigma$ the model tracks the noise target, and that is *correct*, because when $\sigma$ is much bigger than the width of the data the smoothed score genuinely is close to $-\mathbf{z}/\sigma$. At small $\sigma$ the model tracks the physics instead. The two columns cross over between $\sigma = 0.05$ and $\sigma = 0.02$ — which is where your Week 11 sweep found its transition, and where the spacing of your training configurations says it should be. Three independent measurements of one crossover.
+
+**One correction to your conclusion.** You wrote that "the very low-sigma values are very hard for the network to learn." I would put it almost the opposite way. At $\sigma = 0.01$ your norm ratio against the physical score is $0.794$ — and the score you should be compared against there is not $-\beta\nabla U$ itself but the score of the distribution *already smoothed by* $\sigma_\text{min}$, which is smaller by a factor
+
+$$\frac{s^2}{s^2 + \sigma^2} \approx 0.87$$
+
+with $s \approx 0.026$ the transverse thermal width of your data. Measured against the right reference, you are at about **91% of correct**. That's not bad actually -- the network is not struggling. It is declining to memorize, and getting the physics nearly right instead. What is genuinely unlearnable down there (what would actually be hard to learn) is the *empirical* target, and we do not want that target.
+
+### The orthogonality experiment
+
+Your measured spread matches $1/\sqrt{d}$ essentially exactly:
+
+| $d$ | your std | $1/\sqrt{d}$ |
+|---|---|---|
+| 2 | 0.7081 | 0.7071 |
+| 9 | 0.3356 | 0.3333 |
+| 16 | 0.2482 | 0.2500 |
+| 25 | 0.2012 | 0.2000 |
+
+Good results.  Now we can use it. Your configuration space has $d = 36$, so
+
+$$\frac{1}{\sqrt{36}} = 0.167$$
+
+is the cosine similarity you would get between two vectors **chosen at random**. That can be interpretted as a null baseline for reading your memorization table. Your $0.315$ against the noise sits meaningfully *above* chance, which is consistent with the predicted $\approx 0.4$ for a physics-learned model and inconsistent with the model ignoring the noise direction entirely. And $0.971$ against the physics is nowhere near chance. It's worth remembering and referencing that $0.167$ when you write this up; a measurement without its null is only half an argument.
+
+### The held-out test needs one line changed
+
+The structure here is right. You split correctly, you train on `x_train` only, and you evaluate 500 training and 500 held-out configurations with 100 noise draws each. All good.
+
+But in the cell just before the evaluation you have:
+
+```python
+model.load_state_dict(torch.load("lj13_f_theta_2.pth"))
+```
+
+That checkpoint was trained on **all 25,000 configurations**, including the 5,000 you are treating as held out. So the model under test has already seen the test set, and the experiment cannot detect memorization even in principle.
+
+**Your output also suggests that your “held-out” configs were probably not actually held-out.** Train and test agree to four significant figures — $0.9790$ against $0.9792$, $0.7762$ against $0.7793$. That is too good. A genuine held-out comparison will always show some statistical scatter. **When a result is *too* clean, that is evidence that something isn't right in the setup, not evidence about nature.**
+
+The fix is to delete that line. You already trained the correct model a few cells earlier.
+
+### Two models trained and thrown away
+
+In `LJ_13_Test_Memorization_1.ipynb` the `torch.save` call raised a `NameError`, so that training run was lost — and it had converged to a loss of about **10.18**, comfortably below the 12.2 of the checkpoint you then went on to test. That is presumably the raised $\sigma_\text{min}^\text{train}$ paying off, roughly a 17% improvement, and at the moment it exists nowhere.
+
+Both memorization notebooks have the same shape: they train a better model, fail to use it, and evaluate an older one. Get the save working and re-run the tests against your best model. The conclusions will not change, but the numbers will be the ones you actually want to report.
+
+### Three things carried over to fall work (things that have been in my head for awhile, putting here for the sake of logging)
+
+**1. Your 10-config experiment had a floor, and it was not zero.** From Week 11 — you trained on 10 configurations at a single $\sigma$ and the loss stalled near 33 against a baseline of 36, which you read as failure. There is a reason it could never have reached zero, and it is a nice one.
+
+Your network is $O(3)$-equivariant by construction, which means it can only ever represent an $O(3)$-*invariant* density. But ten fixed configurations are not rotationally invariant — they sit at ten specific orientations. So the best your network can fit is the *symmetrized* version of that data: ten continuous orbits $\{Qx_m\}$, each a 3-dimensional manifold, rather than ten points.
+
+Split the noise accordingly. The part that moves you **off** the orbit (33 dimensions) is a genuine departure from the data and the network can undo it. The part that moves you **along** the orbit (3 dimensions) just rotates the cluster slightly, landing on an equally valid configuration — and there is nothing to correct. So
+
+$$\text{loss floor} = \mathbb{E}\|\mathbf{z}_\parallel\|^2 = 3 \quad \text{out of } 36$$
+
+Three, because $SO(3)$ is a three-parameter group. Permutations are discrete and contribute nothing. **Equivariance is causing an irreducible loss, and it is right to.** Rigidly rotating noise is physically indistinguishable from the cluster having started at a different orientation, and a network that "corrected" it would be wrong.
+
+Two consequences. Your 10-config experiment should have been targeting 3, not 0 as the floor — and at 33 it was still far from the floor, so it was undertrained rather than fundamentally limited. And your main model's loss carries the same floor: of the converged 12.2, at least 3 can never come out, so the "66% of variance captured" figure is measured against the wrong ceiling (you're doing a little better than it looks, since the actual min loss is 3 rather than 0).
+
+**2. There is a bug in your old-model comparison.** In `LJ_13_Modified_Score_Model.ipynb` you benchmark `lj13_f_theta.pth` and get magnitude ratios of $0.003$, $0.032$, $0.426$ and $5.839$, along with a *negative* cosine at $\sigma = 0.1$. The negative cosine is the giveaway — a model that bad could not produce usable samples.
+
+That checkpoint is $f$-parametrized, but the cell reads its output as if it were the score, so every ratio is wrong by a factor of $\sigma$. The arithmetic confirms it twice: $0.003/0.01 = 0.30$ and $5.839/6.44 = 0.907$, both perfectly sensible numbers. Divide by $\sigma$ and the comparison becomes meaningful.
+
+**3. Small nitpicky things.**
+- The $\sqrt{2\tau_\text{int}} \approx 16.1$ reblocking check is still not done — `Lennard_Jones_13.ipynb` has not been touched since Week 9. It closes a question you have been carrying since Week 8 and it is arithmetic on numbers you have already printed.
+- Draw $U_\text{min} = -44.3268$ as a line on the energy histograms. You use the number for $T_\text{eff}$ but never show it.
+- The LJ-38 structure images and disconnectivity graph.
+- `from networkx import sigma` is an accidental auto-import sitting at the top of a training cell. Delete it.
+- `Tests.docx` is a Word file in a git repository — invisible to diffs, and nobody can see what changed. Those tables belong in a notebook or a markdown file. Worth fixing the habit now, before the new repository inherits it.
+- The EGNN is now defined in five notebooks with small differences between them. That is the argument for `src/` in the fall repository: define the model once, import it everywhere.
+
+### Where this leaves LJ-13
+
+You built a generative model for a physical system, and then you established what it was actually doing — which is the harder and rarer half. You have a validated reference dataset, a symmetry-verified architecture, a direct comparison of the learned score against the exact one, and a thermodynamic calibration that puts your samples within 3% of the correct ensemble temperature. Along the way you disproved one of my hypotheses with data, settled a question about your own model that neither of us could answer by argument, and derived the high-dimensional geometry result that makes your own diagnostic interpretable.
+
+That is a complete piece of work. Part of what we will do this fall is write it up — the report scaffold is waiting, and the validation methodology section is the part of this that most people simply do not do. 
