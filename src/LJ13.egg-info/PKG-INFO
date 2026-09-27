@@ -1,0 +1,9 @@
+Metadata-Version: 2.4
+Name: LJ13
+Version: 0.1.0
+Summary: Score-based generative model for LJ13 cluster configurations
+Requires-Python: >=3.9
+Requires-Dist: numpy
+Requires-Dist: scipy
+Requires-Dist: torch
+Requires-Dist: matplotlib
