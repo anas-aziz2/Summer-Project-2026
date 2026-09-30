@@ -727,3 +727,130 @@ That checkpoint is $f$-parametrized, but the cell reads its output as if it were
 You built a generative model for a physical system, and then you established what it was actually doing — which is the harder and rarer half. You have a validated reference dataset, a symmetry-verified architecture, a direct comparison of the learned score against the exact one, and a thermodynamic calibration that puts your samples within 3% of the correct ensemble temperature. Along the way you disproved one of my hypotheses with data, settled a question about your own model that neither of us could answer by argument, and derived the high-dimensional geometry result that makes your own diagnostic interpretable.
 
 That is a complete piece of work. Part of what we will do this fall is write it up — the report scaffold is waiting, and the validation methodology section is the part of this that most people simply do not do. 
+
+## Late September — the report and the refactor
+
+Good work. You answered a question we have had in our minds since August, drafted the three sections of the report, and pulled the model out into a package. Comments below are mostly about finishing, not about direction.
+
+### The reblocking question is answered 
+
+Good result - you ran the check:
+
+$$\frac{\sigma_\text{plateau}}{\sigma_\text{naive}} = \frac{7.092\times10^{-4}}{4.458\times10^{-5}} = 15.91 \qquad\text{against}\qquad \sqrt{2\tau_\text{int}} = 16.10$$
+
+Agreement to 1.2%. The three diagnostics were never in conflict — you had been comparing quantities that differ by a known factor, and now you have shown it rather than been told it.
+
+Even better than the number itself: you worked out *why* in the writeup, including that $B_\text{plateau} \approx 20$ to $50\tau_\text{int}$ and that your case sits at about $30\tau_\text{int}$. And you drew the consequence yourself: energy decorrelates quickly because LJ-13 has a single basin, LJ-38 has two, basin identity will not decorrelate the same way, and that is the argument for replica exchange. Very nice! 
+
+### The report — what is working
+
+You wrote Methods, Validation Methodology and Results, and left Introduction and Background for later. As requested, well done. 
+
+Specific things that are good:
+
+- **The Methods section is reproducible.** Acceptance tuning, $10^8$ steps, burn-in, save stride, center-of-mass removal, the architecture table with the parameter count, and — unusually for a first report — **hardware and wall-clock time**. Most people omit that and regret it later.
+- **You show the loss two ways**, as the $\sigma^2$-weighted score loss and as the equivalent $\|f_\theta + \mathbf{z}\|^2$. That equivalence is the whole justification for the parametrization, so it is good to have it on the page.
+- **You note the architecture is equivariant to $O(3)$ and not only $SO(3)$** — that reflections come for free. A reader who knows the area will notice you noticed.
+- **The validation hierarchy is stated up front** — data, then architecture, then score, then ensemble. That framing is the spine of the section and you have it.
+
+### Validation results are in the wrong section
+
+Your quantitative results are good, and Tables 2 and 3 are the right kind of table. But they are in the wrong place, and the section they belong to is empty.
+
+**The Validation Methodology section reports no measurements at all.** It sets out the hierarchy, defines the autocorrelation function and $\tau_\text{int}$, writes down the three symmetry relations being checked, and describes the score comparison — and then never says what any of them measured. Meanwhile the symmetry relative errors and the score comparison, which are validation results, sit in the Results section.
+
+As we discussed: **validation results go in the Validation section**; Results is for the research findings. So:
+
+- Table 2's symmetry block — translation $3.51\times10^{-7}$, rotation $3.39\times10^{-7}$, permutation $3.18\times10^{-7}$ against the baseline's $0.08$, $1.66$, $3.39$ — belongs under *Symmetry verification*.
+- Table 3, cosine similarity and norm-ratio, belongs under *Direct comparison of the learned score*.
+- The reblocking numbers you just computed — $15.91$ against $16.10$ — belong under *Statistical validity of the reference data*, where at the moment the ratio appears only as "$\approx 16$" twice. Give the actual figures; the agreement to 1.2% is the result.
+- The effective temperature belongs under *Thermodynamic calibration*.
+
+What then remains in Results is what should be there: the baseline-versus-equivariant comparison, the energy and pairwise-distance distributions, and the score-deficit analysis.
+
+### The cross-check in your last subsection is the best thing in the report
+
+Worth saying separately, because it would be easy to miss what you have done.
+
+You determine the score deficit **two independent ways** — from the norm ratio directly ($R_\text{norm} = 0.906$), and from the thermodynamics via $\alpha = T_\text{true}/T_\text{eff} = 0.109/0.122 = 0.893$ — and they agree to 1.4%. That is a measurement of the score made with a ruler, checked against a measurement of the same quantity made with a thermometer.
+
+You also flag, correctly, that $\alpha$ came from the sampler's ensemble rather than a pure Langevin chain. Keep that caveat; it is what makes the agreement credible rather than suspicious.
+
+This is the paragraph I would build the report's abstract around.
+
+### Your best result is missing
+
+The numbers in the report are internally consistent with each other, and they describe a model **without** the final Langevin refinement (at least so far). $T_\text{eff} = 0.122$ is close to the $0.119$ you got from tuning $\sigma_\text{min}$ alone.
+
+But your best result was $T_\text{eff} = 0.1119$ — decoupled $\sigma_\text{min}$ *plus* 200 steps of Langevin refinement — which brought you within 2.7% of the training reference and removed 92% of the original discrepancy. That should also be included, as should the refinement description itself in the Sampling subsection.
+
+This is your main technical result, so it should be included. 
+
+### Two numbers I would like you to check
+
+Both may be fine; I would just like to know which.
+
+1. **$W_2(E) = 1.92\times10^{17}$ for the baseline.** Physically this is believable — overlapping atoms and $r^{-12}$ will do that — but a reader sees $10^{17}$ in a table and assumes a bug. Elsewhere you say you kept only $U<0$ configurations for the histogram comparison. Was the same filter applied here? If not, say so, and consider reporting the filtered value alongside, or quoting a median rather than a mean.
+2. **The baseline gives 9.82% of configurations with $U<0$**, where over the summer you reported 5.4%. If this is a rerun, that is fine.
+
+### The decoupling of the $\sigma_\text{min}$ values is not described yet 
+
+This is the one I would fix first after the numbers, because a real finding has gone missing.
+
+The report gives **a single** noise floor: Methods says $\sigma$ was sampled from a geometric range between $\sigma_\text{min} = 0.01$ and $\sigma_\text{max} = 6.4404$, and the Sampling subsection gives no $\sigma_\text{min}$ at all. A reader therefore concludes you used 0.01 throughout.
+
+But you have **two** floors, and separating them was one of the things we learned this summer. Your own sweep found the optimum at
+
+$$\sigma_\text{min}^\text{train} = 0.02, \qquad \sigma_\text{min}^\text{sample} = 0.01$$
+
+with $T_\text{eff}$ degrading in both directions away from that. So 0.01 is correct as a *sampling* floor — pushing below it made things worse, which was itself an unexpected result — but the Training section currently reports it as the *training* floor, where your optimum was 0.02.
+
+What is missing is the reasoning, and it is worth a short paragraph of its own: the two floors answer different questions. In training, $\sigma_\text{min}$ is the smallest noise level the network is ever shown, and below roughly 0.09 the target cannot be fitted without memorizing the dataset. In sampling, $\sigma_\text{min}$ is where the reverse SDE stops, so it sets how much residual noise is left in the output. One wants to be large, the other small, and they were the same variable in your code for no reason other than that `get_sigma` was reused.
+
+Also note the Sampling subsection never mentions the **final Langevin refinement**, which is how you got your best number. See the section above.
+
+### One smaller mismatch
+
+Equation (10) describes the message MLP as $\phi_m(h_i, h_j, d_{ij}^2, \sigma)$. Your final network takes $\log\sigma$, through the learned embedding you added yourself — which was a genuine improvement and deserves to be in the Methods rather than quietly dropped.
+
+### One passage that will confuse a reader
+
+In the statistical validity subsection you give
+
+$$N_\text{eff} = \frac{N}{2\tau_\text{int}} \approx 384{,}615$$
+
+and then correctly point out that $N_\text{eff} \ne N/B_\text{plateau} = 25{,}000$. The arithmetic is right and the point is a good one.
+
+The problem is that **$25{,}000$ is also the number of configurations you saved**, so a reader will assume those two things are related. They are not. One is the effective number of independent *energy measurements* in a chain of $10^8$ steps; the other is how many *configurations* you wrote to disk. They coincide only because your save stride happens to equal the plateau block size.
+
+Two fixes, both small. State the units of $\tau_\text{int}$ explicitly — is it MC steps or recorded samples? And separate the two quantities in the text, so it is clear that your 25,000 saved configurations are each about $30\tau_\text{int}$ apart and therefore all independent. That is the statement you actually want to make about your training data.
+
+### A mechanical pass
+
+None of these are conceptual, but they all should be fixed for a formal paper:
+
+- **Thirteen `\begin{quote}` environments.** You are using `quote` as a container for body text, but it is meant for quotations and it indents everything it wraps. Delete them all; the section text should sit at the normal margin.
+- **Add citations.** Use the `\cite` command we talked about today. `refs.bib` is loaded with over a thousand lines. Flyvbjerg–Petersen, Sokal, Vincent, Song and Ermon, Satorras — all need citing, and you have them in Zotero already.
+- **Flyvbjerg–Petersen is misspelled** in all five places as "Flyvberg-Peterson." 
+- Figure captions, as we discussed today.
+- One `figuree`, one `perumatuon`, and the autocorrelation equation has a stray $\langle A\rangle$ where it should be $\langle E\rangle$.
+
+### The `src/` refactor
+
+Pulling the model into `src/LJ13/` as an installable package is great! And the module split/organization you came up with is very sensible — `egnn`, `score`, `sde`, `train`, `sampling`, `data`, `analysis`. You mentioned you will add `mcmc`. The Week 10 fixes are all correctly carried over: `log_sigma` input, the center-of-mass projection on the output, COM-free noise in training, `target = -z`, COM-free prior in sampling. `VESDE` even defaults to your tuned $\sigma_\text{min} = 0.02$.
+
+Three things to finish it:
+
+**1. Please check to see if you may have refactored the wrong version.** `src/LJ13/egnn.py` has `nn.Linear(2*hidden_dim + 2, hidden_dim)`, which means $\log\sigma$ enters as a raw scalar concatenated to the message input. **Your Week 11 model replaced that with a learned $\sigma$-embedding MLP** — your own idea, and a real improvement — which made the input `3*hidden_dim + 1`. The canonical model should be your best model, or everything built on it inherits the older one.
+
+**2. Nothing imports from it yet.** All six notebooks still define `MessageMLP`, `EGNNLayer` and `ScoreNetwork` inline; the pro move is to instead use `from LJ13 import ...`. So there are now *seven* copies of the network rather than one. Until that happens, a fix in `src/` never reaches the notebooks and they will drift apart again.
+
+**3. Thirteen build artifacts are committed** — seven `__pycache__/*.pyc` files and six under `LJ13.egg-info/`. Your `.gitignore` is still just `data/`. These are generated files, like `Tests.docx` was a binary one: they churn on every run, they are invisible to diffs, and they do not belong in version control. Add `__pycache__/`, `*.pyc` and `*.egg-info/` to `.gitignore` and `git rm -r --cached` the ones already tracked.
+
+Good, though, on converting `Tests.docx` to markdown and deleting the stray `networkx` import. Both were on the list.
+
+### A few other outstanding items
+
+- **I think your latest memorization tests are not pushed.** You described the 2500/22500 split and the independent-chain test three weeks ago, but I don't see them in the repository (the two notebooks were last touched on 6 September). `LJ_13_Test_Memorization_2.ipynb` also still loads `lj13_f_theta_2.pth`, the checkpoint trained on all 25,000 configurations, which is the line that invalidated that test. Please push the work and delete that line.
+- **Please add a $U_\text{min}$ line** on the energy histograms.
+
