@@ -854,3 +854,65 @@ Good, though, on converting `Tests.docx` to markdown and deleting the stray `net
 - **I think your latest memorization tests are not pushed.** You described the 2500/22500 split and the independent-chain test three weeks ago, but I don't see them in the repository (the two notebooks were last touched on 6 September). `LJ_13_Test_Memorization_2.ipynb` also still loads `lj13_f_theta_2.pth`, the checkpoint trained on all 25,000 configurations, which is the line that invalidated that test. Please push the work and delete that line.
 - **Please add a $U_\text{min}$ line** on the energy histograms.
 
+
+## Early October
+
+I know you had a midterm this week, so this is a shorter note on my sense of where you are. Two items from before are properly finished, and then I have a list of what is still leftover from before. 
+
+### Memorization question finally answered
+
+This is done, and looks right.
+
+- `LJ_13_Test_Memorization_2.ipynb` now trains on `x_train` only and saves and reloads **its own** checkpoint. 
+- `LJ_13_Test_Memorization_3_new_LJ_chain.ipynb` is a stronger test: trained on the original chain, evaluated against a configuration set from an entirely separate one.
+
+At $\sigma = 0.01$, train against test:
+
+| Test | cosine vs $-\beta\nabla U$ | norm ratio |
+|---|---|---|
+| Held-out, same chain | 0.9812 / 0.9814 | 0.7632 / 0.7658 |
+| Independent chain | 0.9812 / 0.9814 | 0.7637 / 0.7654 |
+
+The two tests agree with each other. Taken together with the cosine table from September — 0.98 against the physical score and 0.32 against the noise — I think you've settled this. You can state in the report that the model does not memorize and defend it three different ways.
+
+### One thing missing from the repo -- yes, I am nitpicking here 
+
+**`LJ13_configs_2.npy` is not in the repository and can't be generated from anything in it.** The notebook loads it, the outputs are saved so it clearly ran on your machine, but the test isn't reproducible yet.
+
+Suggestion: please commit the **generator**, not the data. A short script or notebook that produces the second chain, with:
+
+- the **random seed** stated explicitly,
+- the **burn-in** discarded,
+- the save stride, and
+- a one-line note that it is an independent chain with its own seed rather than a continuation of the first.
+
+This way, there is no need to commit `LJ13_configs_2.npy` itself. `LJ13_configs.npy` is already 7.8 MB in version control. The general guideline is **commit the generator and the seed, never the data** — a script that reproduces a dataset is smaller, more useful, and more honest than the dataset.
+
+### What happened to the 2500 split?
+
+You had described trying a 2500/22500 split on Slack, but the one you pushed is the 20000/5000 one. Would be good to see both, because they address different questions.
+
+- **20000/5000** is the conventional held-out test, and the right one for the model you actually report.
+- **2500/22500** is a stress test. Cutting the training set by a factor of eight while leaving the network the same size **increases** the pressure to memorize — same capacity, far fewer things to store. If memorization were going to show up anywhere, that is where. 
+
+
+### Carried over from last time
+
+Done since the last note, and worth saying:
+
+- The `quote` environments are nearly all gone (13 down to 1).
+- Flyvbjerg--Petersen is spelled correctly everywhere.
+- Citations have started.
+- Two more Background subsections written --- Langevin and Boltzmann, and the score function.
+
+Still on deck:
+
+1. Correct me if I'm wrong, I think **your best result is still not in the report.** $T_\text{eff} = 0.1119$ nor the **Langevin refinement** that produced it aren't there yet. The Sampling subsection stops at the predictor--corrector.
+2. **The $\sigma_\text{min}$ decoupling is still not described.** The report presents one noise floor where you have two, so one of your best findings is not visible to a reader.
+3. **The validation numbers are still in the Results section.** Table 2's symmetry block and Table 3 belong under *Symmetry verification* and *Direct comparison of the learned score*; the reblocking ratio $15.91$ against $16.10$ belongs under *Statistical validity*, where it currently appears only as "$\approx 16$" twice.
+4. **Four figures still say "Enter Caption."**
+5. Keep going on citations --- three so far, and Flyvbjerg--Petersen, Sokal, Vincent, Song and Ermon, and Satorras all still need them.
+6. **Nothing imports from `src/` yet** --- all 24 notebooks still define the network inline. Two import lines per notebook and the duplicates can go.
+7. **`src/LJ13/egnn.py` is still the pre-embedding architecture**, without the learned $\sigma$-embedding you added yourself.
+8. **Thirteen build artifacts are still tracked**, and `.gitignore` is still only `data/`. Add `__pycache__/`, `*.pyc` and `*.egg-info/`, then `git rm -r --cached` the ones already in.
+
