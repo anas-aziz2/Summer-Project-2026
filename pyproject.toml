@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "LJ13"
+version = "0.1.0"
+description = "Score-based generative model for LJ13 cluster configurations"
+requires-python = ">=3.9"
+dependencies = [
+    "numpy",
+    "scipy",
+    "torch",
+    "matplotlib",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
